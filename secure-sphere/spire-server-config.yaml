@@ -1,0 +1,42 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: spire-server
+  namespace: spire
+data:
+  server.conf: |
+    server {
+      trust_domain = "securesphere.internal"
+      bind_address = "0.0.0.0"
+      bind_port = "8081"
+      log_level = "INFO"
+      
+      # HA Configuration: Identity stored in Postgres
+      data_store "sql" {
+        plugin_data {
+          database_type = "postgresql"
+          connection_string = "dbname=spire_db user=spire_user password=ChangeMe_ProductionPassword_!@# host=postgres-service.default.svc.cluster.local port=5432 sslmode=require"
+        }
+      }
+
+      # Key Manager: Rotates the CA keys automatically
+      # In REAL production, use "aws_kms" or "disk" with encrypted volume
+      key_manager "disk" {
+        plugin_data {
+          keys_path = "/run/spire/data/keys"
+        }
+      }
+
+      # Node Attestor: Verifies the Identity of the K8s Nodes
+      node_attestor "k8s_sat" {
+        plugin_data {
+          cluster = "production-cluster"
+        }
+      }
+
+      ca_subject = {
+        country = "US"
+        organization = "SecureSphere-X"
+        common_name = "SecureSphere Root CA"
+      }
+    }
