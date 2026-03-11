@@ -12,7 +12,7 @@ SecureSphere-X is a production-grade communication platform designed to protect 
 
 ## 📖 Documentation
 * [System Design & Tech Stack](SYSTEM_DESIGN.md)
-* [Cryptographic Process Flow](CRYPTOGRAPHIC_FLOW.md)
+* [Cryptographic Process Flow](PROCESS_FLOW.md)
 
 ---
 
