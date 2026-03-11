@@ -1,0 +1,102 @@
+services:
+  # 1. The Trust Authority
+  spire-server:
+    image: ghcr.io/spiffe/spire-server:1.10.1
+    container_name: spire-server
+    hostname: spire-server
+    user: "0:0"
+    volumes:
+      - ./infrastructure/spire/conf/server:/opt/spire/conf/server
+      # NEW: Persist the Server Database (SQLite)
+      - spire-server-data:/opt/spire/data/server
+    command: ["-config", "/opt/spire/conf/server/server.conf"]
+    networks:
+      - zero-trust-net
+
+  # 2. The Node Agent
+  spire-agent:
+    image: ghcr.io/spiffe/spire-agent:1.10.1
+    container_name: spire-agent
+    depends_on:
+      - spire-server
+    user: "0:0"
+    pid: "host"   # <--- ADD THIS LINE (CRITICAL)
+    volumes:
+      - ./infrastructure/spire/conf/agent:/opt/spire/conf/agent
+      - spire-agent-data:/opt/spire/data/agent
+      - spire-agent-socket:/run/spire/sockets
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: ["-config", "/opt/spire/conf/agent/agent.conf", "-joinToken", "$TOKEN"]
+    networks:
+      - zero-trust-net
+
+  # 4. The Zero-Trust Gateway (Envoy)
+  envoy-proxy:
+    image: envoyproxy/envoy:v1.30-latest
+    container_name: envoy-proxy
+    user: "0:0" # Run as root to access socket
+    depends_on:
+      - spire-agent
+    volumes:
+      - ./infrastructure/envoy/config/envoy.yaml:/etc/envoy/envoy.yaml
+      - spire-agent-socket:/run/spire/sockets
+    networks:
+      - zero-trust-net
+    labels:
+      - "org.securesphere.service=envoy"
+
+  # 3. A Dummy Workload
+  backend-service:
+    # CHANGE: Use 'build' instead of 'image'
+    build: 
+      context: ./services/backend
+      dockerfile: Dockerfile
+    container_name: backend-service
+    volumes:
+      - spire-agent-socket:/run/spire/sockets
+      # Map the code so we can edit live, BUT exclude system files
+      - ./services/backend:/app
+    environment:
+      - PYTHONUNBUFFERED=1
+      - SPIFFE_ENDPOINT_SOCKET=unix:///run/spire/sockets/agent.sock
+      # Critical for finding the Quantum Library
+      - LD_LIBRARY_PATH=/usr/local/lib 
+    networks:
+      - zero-trust-net
+    labels:
+      - "org.securesphere.service=backend"
+      - "com.docker.compose.service=backend-service"
+
+  client-ui:
+    build: 
+      context: ./services/backend
+      dockerfile: Dockerfile
+    container_name: client-ui
+    volumes:
+      # 1. CRITICAL: Mount the socket volume
+      - spire-agent-socket:/run/spire/sockets
+      
+      # 2. Map Code
+      - ./services/client-ui/main.py:/app/main.py
+      - ./services/client-ui/templates:/app/templates
+      - ./services/backend/pq_crypto.py:/app/pq_crypto.py
+      - ./services/backend/mls.py:/app/mls.py
+    working_dir: /app
+    environment:
+      # FIX: Ensure it is 'unix://' followed by the absolute path
+      - SPIFFE_ENDPOINT_SOCKET=unix:///run/spire/sockets/agent.sock
+      - LD_LIBRARY_PATH=/usr/local/lib
+      - PYTHONPATH=/app
+    command: python3 main.py
+    ports:
+      - "3000:3000"
+    networks:
+      - zero-trust-net
+
+volumes:
+  spire-server-data: # Persist Server Data
+  spire-agent-data:  # Persist Agent Data
+  spire-agent-socket:
+
+networks:
+  zero-trust-net:

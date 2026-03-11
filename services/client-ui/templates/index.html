@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>SecureSphere-X | Secure Communication System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        /* GLOBAL FONT: Clean Sans-Serif (Segoe UI) */
+        body { 
+            background-color: #020617; 
+            color: #e2e8f0; 
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; 
+            overflow: hidden; 
+            height: 100vh; 
+            width: 100vw; 
+        }
+
+        /* TECHNICAL FONT: Monospace (Fira Code) */
+        .font-code, input, .log-text { 
+            font-family: 'Fira Code', monospace; 
+        }
+        
+        /* Neon Glows */
+        .neon-border-pink { border: 1px solid #db2777; box-shadow: 0 0 15px rgba(219, 39, 119, 0.3); }
+        .neon-border-cyan { border: 1px solid #06b6d4; box-shadow: 0 0 15px rgba(6, 182, 212, 0.3); }
+        
+        /* Transitions */
+        .panel-transition { transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1); }
+    </style>
+</head>
+<body class="flex flex-col p-4">
+
+    <div id="app" class="flex-grow flex flex-col h-full relative min-h-0">
+        
+        <div class="text-center mb-4 flex-shrink-0">
+            <h1 class="text-3xl font-bold tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-pink-500 via-yellow-400 to-cyan-500 uppercase">
+                Secure Sphere-X
+            </h1>
+            <p class="text-xs text-gray-500 uppercase tracking-[0.3em] mt-1 font-bold">Post-Quantum Secure Communication System</p>
+        </div>
+
+        <div class="flex-grow flex gap-4 w-full min-h-0 items-stretch relative">
+            
+            <div :class="vizMode ? 'w-1/4' : 'w-1/2'" class="panel-transition bg-slate-900/80 rounded-xl p-4 flex flex-col min-h-0 neon-border-pink backdrop-blur-sm z-20">
+                
+                <div class="flex items-center gap-2 mb-4 border-b border-pink-900 pb-2 flex-shrink-0">
+                    <div class="w-3 h-3 rounded-full bg-pink-500 animate-pulse"></div>
+                    <h2 class="text-xl font-bold text-pink-500 tracking-wide">ALICE</h2>
+                    <span class="ml-auto text-[10px] bg-pink-900/50 border border-pink-700/50 px-2 py-1 rounded text-pink-300 font-sans font-bold uppercase tracking-widest shadow-sm">
+                        {{ alice.epoch >= 0 ? 'EPOCH ' + alice.epoch : 'OFFLINE' }}
+                    </span>
+                </div>
+
+                <div class="grid grid-cols-1 gap-2 mb-4 flex-shrink-0">
+                    <button @click="invite('alice', 'bob')" class="w-full flex items-center justify-center bg-gradient-to-r from-pink-700 to-purple-800 hover:from-pink-600 hover:to-purple-700 py-2 rounded text-[11px] font-bold tracking-widest uppercase transition shadow-lg">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path></svg>
+                        Establish Quantum Link
+                    </button>
+                    <button @click="refresh('alice')" class="w-full flex items-center justify-center bg-slate-800 hover:bg-slate-700 py-2 rounded text-[10px] text-gray-300 font-bold tracking-widest uppercase border border-slate-700 hover:border-slate-500 transition">
+                        <svg class="w-3.5 h-3.5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                        Check for Replies
+                    </button>
+                </div>
+
+                <div class="flex-grow bg-black/50 rounded p-3 font-code text-xs overflow-y-auto mb-3 border border-pink-900/30 min-h-0">
+                    <div v-for="log in alice.logs" class="mb-1 text-pink-100/80 leading-relaxed log-text">> {{ log }}</div>
+                </div>
+
+                <div class="flex gap-2 flex-shrink-0">
+                    <input v-model="alice.input" @keyup.enter="send('alice', 'bob')" placeholder="Message Bob..." class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-sm focus:outline-none focus:border-pink-500 text-pink-100 placeholder-slate-500 shadow-inner">
+                    <button @click="send('alice', 'bob')" class="bg-pink-600 px-4 flex items-center justify-center rounded hover:bg-pink-500 transition shadow-lg text-white">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
+                    </button>
+                </div>
+            </div>
+
+
+            <div :class="vizMode ? 'w-1/2 opacity-100 scale-100' : 'w-0 opacity-0 scale-95 overflow-hidden'" 
+                 class="panel-transition bg-black rounded-xl border border-yellow-500/30 flex flex-col min-h-0 relative shadow-2xl z-30">
+                
+                <div class="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/circuit-board.png')]"></div>
+
+                <div class="p-3 border-b border-yellow-500/30 bg-yellow-900/10 flex justify-between items-center relative z-40 flex-shrink-0">
+                    <span class="text-yellow-500 font-bold text-xs tracking-[0.2em] uppercase">⚡ Quantum Interceptor</span>
+                    <button @click="closeViz" class="text-gray-500 hover:text-red-500 font-bold text-xs cursor-pointer border border-transparent hover:border-red-500 px-2 rounded transition font-code">
+                        [CLOSE X]
+                    </button>
+                </div>
+
+                <div class="flex-grow flex flex-col justify-start items-center p-8 space-y-6 relative z-10 overflow-y-auto" v-if="currentViz">
+                    
+                    <div class="w-full bg-purple-900/10 border border-purple-500/30 rounded p-3 mb-2 flex justify-between items-center group hover:border-purple-500/70 transition">
+                        <div>
+                            <p class="text-[10px] text-gray-500 uppercase tracking-widest mb-1 group-hover:text-purple-400 transition font-bold">Transport Layer</p>
+                            <p class="text-sm text-purple-400 font-code font-bold">mTLS (Envoy Proxy)</p>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-xs font-bold tracking-widest uppercase text-purple-300/80">
+                                Zero-Trust Tunnel Authenticated Via SPIFFE Identity.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="w-full bg-slate-900 p-4 rounded border border-slate-700 relative group hover:border-pink-500 transition">
+                        <div class="absolute -top-3 left-3 bg-slate-800 px-2 text-[10px] text-pink-400 font-bold tracking-wider">PLAINTEXT INPUT</div>
+                        <p class="font-code text-pink-300 text-sm">{{ currentViz.plaintext || "Key Exchange Request" }}</p>
+                    </div>
+
+                    <div class="flex flex-col items-center relative w-full">
+                        <div class="h-6 w-[1px] bg-gradient-to-b from-pink-500 to-yellow-500"></div>
+                        
+                        <div class="relative flex items-center justify-center w-full">
+                            
+                            <div class="absolute right-[60%] w-48 text-right pr-4">
+                                <div class="border-r-2 border-cyan-500/50 pr-2">
+                                    <p class="text-[10px] text-cyan-400 uppercase tracking-widest font-bold mb-1">TECHNOLOGIES</p>
+                                    <p class="text-xs text-gray-300 font-code leading-relaxed">
+                                        <span v-if="currentViz.type === 'MLS_RATCHET'">
+                                            AES-256-GCM<br>
+                                            Custom Ratchet (mls.py)<br>
+                                            FastAPI Backend
+                                        </span>
+                                        <span v-else-if="currentViz.type === 'KYBER_ENCAP'">
+                                            Kyber-768 KEM<br>
+                                            Envoy Proxy (mTLS)<br>
+                                            SPIFFE X.509 SVIDs
+                                        </span>
+                                        <span v-else-if="currentViz.type === 'KEY_GEN'">
+                                            Kyber-768<br>
+                                            SPIRE Workload API<br>
+                                            Docker Infrastructure
+                                        </span>
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div class="flex items-center bg-yellow-500/10 px-6 py-2 rounded-full border border-yellow-500/50 text-yellow-300 text-sm font-bold animate-pulse shadow-[0_0_10px_rgba(234,179,8,0.2)] font-code tracking-wide z-10">
+                                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                                {{ currentViz.type }}
+                            </div>
+
+                            <div class="absolute left-[60%] w-48 text-left pl-4">
+                                <div class="border-l-2 border-yellow-500/50 pl-2">
+                                    <p class="text-[10px] text-yellow-500 uppercase tracking-widest font-bold mb-1">PROCESS</p>
+                                    <p class="text-xs text-gray-300 font-code leading-relaxed">
+                                        <span v-if="currentViz.type === 'MLS_RATCHET'">
+                                            Forward Secrecy:<br>
+                                            Old keys destroyed.<br>
+                                            New Epoch derived.
+                                        </span>
+                                        <span v-else-if="currentViz.type === 'KYBER_ENCAP'">
+                                            Lattice Encapsulation:<br>
+                                            Secret locked in<br>
+                                            Quantum puzzle.
+                                        </span>
+                                        <span v-else-if="currentViz.type === 'KEY_GEN'">
+                                            Key Generation:<br>
+                                            Creating high-entropy<br>
+                                            Quantum Keypairs.
+                                        </span>
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="h-6 w-[1px] bg-gradient-to-b from-yellow-500 to-cyan-500"></div>
+                    </div>
+
+                    <div class="w-full bg-slate-900 p-4 rounded border border-slate-700 relative group hover:border-cyan-500 transition shadow-[0_0_15px_rgba(6,182,212,0.1)]">
+                        <div class="absolute -top-3 right-3 bg-slate-800 px-2 text-[10px] text-cyan-400 font-bold tracking-wider">ENCRYPTED PAYLOAD</div>
+                        <p class="font-code text-cyan-300 text-sm break-all leading-relaxed opacity-80">
+                            {{ currentViz.ciphertext }}
+                        </p>
+                    </div>
+
+                    <div class="w-full mt-auto pt-6 border-t border-slate-800 grid grid-cols-2 gap-8 items-start">
+                        
+                        <div class="text-center group flex flex-col items-center w-full">
+                            <p class="text-[10px] text-gray-500 uppercase tracking-widest mb-2 group-hover:text-yellow-500 transition font-bold">Key Encapsulation</p>
+                            
+                            <div class="relative group/tooltip cursor-help mb-4">
+                                <p class="text-sm text-yellow-500 font-code font-bold underline decoration-dotted decoration-yellow-500/50 underline-offset-4">Kyber-768</p>
+                                <div class="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-64 p-3 bg-slate-800 border border-yellow-500/50 text-gray-200 text-[11px] rounded opacity-0 group-hover/tooltip:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl font-sans tracking-wide">
+                                    Lattice-based cryptography resistant to quantum decryption attacks.
+                                </div>
+                            </div>
+                            
+                            <div class="w-full max-w-[280px] h-20 bg-black/40 border border-slate-800 rounded flex flex-col justify-center items-center p-3 shadow-inner">
+                                <template v-if="currentViz.type === 'KEY_GEN'">
+                                    <span class="text-sm text-yellow-400 font-code animate-pulse tracking-wide font-bold">Generating Keypair...</span>
+                                    <span class="text-xs text-gray-400 font-code mt-1">pk = As + e (Mod Q)</span>
+                                </template>
+                                <template v-else-if="currentViz.type === 'KYBER_ENCAP'">
+                                    <span class="text-sm text-yellow-400 font-code animate-pulse tracking-wide font-bold">Encapsulating Shared Secret...</span>
+                                    <span class="text-xs text-gray-400 font-code mt-1">c = uᵀ · As + v</span>
+                                </template>
+                                <template v-else>
+                                    <span class="text-sm text-gray-600 font-code font-bold opacity-60">Kyber Engine Idle</span>
+                                </template>
+                            </div>
+                        </div>
+
+                        <div class="text-center group flex flex-col items-center w-full">
+                            <p class="text-[10px] text-gray-500 uppercase tracking-widest mb-2 group-hover:text-cyan-400 transition font-bold">Payload Encryption</p>
+                            
+                            <div class="relative group/tooltip cursor-help mb-4">
+                                <p class="text-sm text-cyan-400 font-code font-bold underline decoration-dotted decoration-cyan-400/50 underline-offset-4">AES-256-GCM</p>
+                                <div class="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-64 p-3 bg-slate-800 border border-cyan-500/50 text-gray-200 text-[11px] rounded opacity-0 group-hover/tooltip:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl font-sans tracking-wide">
+                                    Symmetric cipher authenticates and secures the message data.
+                                </div>
+                            </div>
+                            
+                            <div class="w-full max-w-[280px] h-20 bg-black/40 border border-slate-800 rounded flex flex-col justify-center items-center p-3 shadow-inner">
+                                <template v-if="currentViz.type === 'MLS_RATCHET'">
+                                    <span class="text-sm text-cyan-400 font-code animate-pulse tracking-wide font-bold">Encrypting & Authenticating...</span>
+                                    <span class="text-xs text-gray-400 font-code mt-1 text-center">IV: {{ Math.random().toString(16).slice(2, 10).toUpperCase() }}<br>Auth Tag Generated</span>
+                                </template>
+                                <template v-else>
+                                    <span class="text-sm text-gray-600 font-code font-bold opacity-60">Awaiting Application Data...</span>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+
+            <div :class="vizMode ? 'w-1/4' : 'w-1/2'" class="panel-transition bg-slate-900/80 rounded-xl p-4 flex flex-col min-h-0 neon-border-cyan backdrop-blur-sm z-20">
+                
+                <div class="flex items-center gap-2 mb-4 border-b border-cyan-900 pb-2 flex-shrink-0">
+                    <div class="w-3 h-3 rounded-full bg-cyan-500 animate-pulse"></div>
+                    <h2 class="text-xl font-bold text-cyan-500 tracking-wide">BOB</h2>
+                    <span class="ml-auto text-[10px] bg-cyan-900/50 border border-cyan-700/50 px-2 py-1 rounded text-cyan-300 font-sans font-bold uppercase tracking-widest shadow-sm">
+                        {{ bob.epoch >= 0 ? 'EPOCH ' + bob.epoch : 'OFFLINE' }}
+                    </span>
+                </div>
+
+                <div class="grid grid-cols-1 gap-2 mb-4 flex-shrink-0">
+                    <button @click="publish('bob')" class="w-full flex items-center justify-center bg-cyan-900 hover:bg-cyan-800 py-2 rounded text-[11px] border border-cyan-700 text-cyan-100 font-bold uppercase tracking-widest transition shadow">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        Publish ID
+                    </button>
+                    <button @click="refresh('bob')" class="w-full flex items-center justify-center bg-slate-700 hover:bg-slate-600 py-2 rounded text-[10px] text-gray-300 font-bold uppercase tracking-widest border border-slate-600 transition">
+                        <svg class="w-3.5 h-3.5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                        Receive Msg
+                    </button>
+                </div>
+
+                <div class="flex-grow bg-black/50 rounded p-3 font-code text-xs overflow-y-auto mb-3 border border-cyan-900/30 min-h-0">
+                    <div v-for="log in bob.logs" class="mb-1 text-cyan-100/80 leading-relaxed log-text">> {{ log }}</div>
+                </div>
+
+                <div class="flex gap-2 flex-shrink-0">
+                    <input v-model="bob.input" @keyup.enter="send('bob', 'alice')" placeholder="Reply to Alice..." class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-sm focus:outline-none focus:border-cyan-500 text-cyan-100 placeholder-slate-500 shadow-inner">
+                    <button @click="send('bob', 'alice')" class="bg-cyan-600 px-4 flex items-center justify-center rounded hover:bg-cyan-500 transition shadow-lg text-white">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
+                    </button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        const { createApp, reactive, ref } = Vue
+
+        createApp({
+            setup() {
+                const alice = reactive({ logs: [], input: "", epoch: -1 })
+                const bob = reactive({ logs: [], input: "", epoch: -1 })
+                const vizMode = ref(false)
+                const currentViz = ref(null)
+
+                // Reset Backend
+                fetch('/api/reset', { method: 'POST' })
+
+                const log = (user, msg) => {
+                    const target = user === 'alice' ? alice : bob
+                    target.logs.push(msg)
+                    setTimeout(() => {
+                        const el = document.querySelectorAll('.overflow-y-auto');
+                        el.forEach(e => e.scrollTop = e.scrollHeight);
+                    }, 50)
+                }
+
+                const triggerViz = (data) => {
+                    currentViz.value = data
+                    vizMode.value = true 
+                }
+                const closeViz = () => vizMode.value = false
+
+                const publish = async (user) => {
+                    log(user, "Generating keys...")
+                    const res = await fetch(`/api/publish/${user}`, { method: 'POST' })
+                    const data = await res.json()
+                    log(user, "Keys Published.")
+                    if(data.viz_data) triggerViz(data.viz_data)
+                }
+
+                const invite = async (sender, target) => {
+                    const res = await fetch('/api/invite', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ sender, target })
+                    })
+                    const data = await res.json()
+                    
+                    if(data.status) {
+                        log(sender, "Invitation Sent.")
+                        if(sender === 'alice') alice.epoch = data.epoch
+                        else bob.epoch = data.epoch
+                        triggerViz(data.viz_data)
+                    }
+                }
+
+                const refresh = async (user) => {
+                    const res = await fetch(`/api/check-inbox/${user}`, { method: 'POST' })
+                    const data = await res.json()
+                    data.logs.forEach(l => log(user, l))
+                    if(data.logs.length > 0) log(user, "Inbox Synced.")
+                    
+                    if(user === 'alice') alice.epoch = data.epoch
+                    else bob.epoch = data.epoch
+                }
+
+                const send = async (sender, target) => {
+                    const targetObj = sender === 'alice' ? alice : bob
+                    const input = targetObj.input
+                    if(!input) return
+                    
+                    log(sender, `Sent: "${input}"`)
+
+                    targetObj.input = "" 
+                    
+                    const res = await fetch('/api/send-msg', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ sender, target, message: input })
+                    })
+                    
+                    const data = await res.json()
+                    if(data.status) {
+                        if(sender === 'alice') alice.epoch = data.epoch
+                        else bob.epoch = data.epoch
+                        triggerViz(data.viz_data)
+                    }
+                }
+
+                return { alice, bob, vizMode, currentViz, publish, invite, refresh, send, closeViz }
+            }
+        }).mount('#app')
+    </script>
+</body>
+</html>
