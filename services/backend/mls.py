@@ -7,6 +7,18 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from pq_crypto import PQHybridEngine
 
 class MLSEngine:
+    """
+    MLSEngine implements an epoch-based key ratcheting protocol inspired by MLS.
+    
+    Security Properties:
+    - Forward Secrecy (PFS): Yes. If the state is compromised at epoch i, previous
+      keys (epoch i-1, i-2, etc.) cannot be recovered because key derivation is
+      based on a one-way KDF (HKDF).
+    - Post-Compromise Security (PCS) / Healing: No. The one-way ratchet does not
+      inject fresh external entropy. If the state is compromised at epoch i, the
+      attacker can compute all future keys (epoch i+1, i+2, etc.) in the session.
+      To recover PCS, a new hybrid key exchange handshake must be initiated.
+    """
     def __init__(self, identity, pq_engine=None):
         self.identity = identity
         self.pq_engine = pq_engine if pq_engine else PQHybridEngine()

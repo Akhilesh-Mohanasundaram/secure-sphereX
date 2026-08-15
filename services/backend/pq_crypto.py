@@ -8,11 +8,11 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 class PQHybridEngine:
     def __init__(self):
-        # We use Kyber768 (NIST ML-KEM Level 3)
-        self.kem_alg = "Kyber768"
+        # We use ML-KEM-768 (NIST FIPS 203 standard)
+        self.kem_alg = "ML-KEM-768"
     
     def generate_server_keys(self):
-        """Server Step 1: Generate Kyber + X25519 Public Keys"""
+        """Server Step 1: Generate ML-KEM-768 + X25519 Public Keys"""
         # 1. Post-Quantum KeyGen
         self.server_kem = oqs.KeyEncapsulation(self.kem_alg)
         pq_public_key = self.server_kem.generate_keypair()
@@ -38,7 +38,7 @@ class PQHybridEngine:
         server_classic_pk_bytes = base64.b64decode(server_keys_b64['classic_pk'])
         server_classic_pk = x25519.X25519PublicKey.from_public_bytes(server_classic_pk_bytes)
 
-        # 1. PQ Encapsulation (Kyber)
+        # 1. PQ Encapsulation (ML-KEM-768)
         with oqs.KeyEncapsulation(self.kem_alg) as client_kem:
             ciphertext, pq_shared_secret = client_kem.encap_secret(server_pq_pk)
 

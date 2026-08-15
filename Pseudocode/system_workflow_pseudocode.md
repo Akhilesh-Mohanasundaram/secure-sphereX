@@ -22,7 +22,8 @@ PROCEDURE Initialize_Environment():
     Envoy_Proxy configures mTLS Listener on Port 8443
     Envoy_Proxy Requires Valid SPIFFE Certificate for all TCP connections
     
-    Delivery_Service -> Memory: Initialize KeyPackage_Store and Message_Queue
+    // Storage Initialization
+    Delivery_Service -> SQLite: Initialize securesphere.db (key_packages & messages tables)
 END PROCEDURE
 ```
 
@@ -31,10 +32,10 @@ END PROCEDURE
 
 ```text
 PROCEDURE Publish_Identity(User="Bob"):
-    Client_UI -> SPIRE_Agent: Fetch Client X.509 SVID Certs
+    Client_UI -> SPIRE_Agent: Fetch Client X.509 Context (SVID + Trust Bundle CA)
     
     // Key Generation
-    Bob_PQ_Keys = Kyber768_GenerateKeyPair()
+    Bob_PQ_Keys = MLKEM768_GenerateKeyPair()
     Bob_Classic_Keys = X25519_GenerateKeyPair()
     Bob_Key_Package = {
         Identity: "Bob",
@@ -43,11 +44,14 @@ PROCEDURE Publish_Identity(User="Bob"):
     }
     
     // Secure Transmission
-    Client_UI -> Envoy_Proxy: POST /mls/key-package (Payload: Bob_Key_Package, mTLS: Client_SVID)
-    Envoy_Proxy -> Envoy_Proxy: Validate Client_SVID
-    Envoy_Proxy -> Delivery_Service: Forward Request
+    Client_UI -> Envoy_Proxy: POST /mls/key-package (Payload: Bob_Key_Package, mTLS: Client_SVID, verify: Trust Bundle CA)
+    Envoy_Proxy -> Envoy_Proxy: Validate Client_SVID against Trust Domain
+    Envoy_Proxy -> Envoy_Proxy: Inject X-Forwarded-Client-Cert (XFCC) header
+    Envoy_Proxy -> Delivery_Service: Forward Request with XFCC header
     
-    Delivery_Service -> Memory: Insert Bob_Key_Package into KeyPackage_Store
+    // Strict Workload Authentication
+    Delivery_Service -> Delivery_Service: Parse and authorize client identity from XFCC header
+    Delivery_Service -> SQLite: Insert Bob_Key_Package into key_packages table
     Delivery_Service -> Client_UI: Return 200 OK
 END PROCEDURE
 ```
@@ -57,17 +61,19 @@ END PROCEDURE
 
 ```text
 PROCEDURE Invite_User(Sender="Alice", Target="Bob"):
-    Client_UI -> SPIRE_Agent: Fetch Client X.509 SVID Certs
+    Client_UI -> SPIRE_Agent: Fetch Client X.509 Context
     
     // Fetch Target Keys
-    Client_UI -> Delivery_Service: GET /mls/key-package/Bob (via mTLS)
+    Client_UI -> Envoy_Proxy: GET /mls/key-package/Bob (mTLS: Client_SVID, verify: Trust Bundle CA)
+    Envoy_Proxy -> Delivery_Service: Forward Request
+    Delivery_Service -> SQLite: Select Bob's key package from key_packages table
     Delivery_Service -> Client_UI: Return Bob_Key_Package
     
     // 1. Generate Group Secret
     Initial_Group_Secret = GenerateRandomBytes(32)
     
-    // 2. Quantum Encapsulation (Kyber)
-    Ciphertext, PQ_Shared_Secret = Kyber768_Encapsulate(Bob_Key_Package.PQ_Public_Key)
+    // 2. Quantum Encapsulation (ML-KEM-768)
+    Ciphertext, PQ_Shared_Secret = MLKEM768_Encapsulate(Bob_Key_Package.PQ_Public_Key)
     
     // 3. Classical Key Exchange (X25519)
     Alice_Temp_Keys = X25519_GenerateKeyPair()
@@ -77,7 +83,7 @@ PROCEDURE Invite_User(Sender="Alice", Target="Bob"):
     Temporary_Session_Key = HKDF_SHA256(Concatenate(PQ_Shared_Secret, Classic_Shared_Secret))
     Encrypted_Group_Secret = AES_GCM_Encrypt(Key=Temporary_Session_Key, Plaintext=Initial_Group_Secret)
     
-    // 5. Setup Local State
+    // 5. Setup Local State (MLS Engine)
     Alice_State.App_Secret, Alice_State.Epoch_Secret = HKDF_SHA256_Derive(Initial_Group_Secret)
     Alice_State.Epoch = 0
     
@@ -86,8 +92,9 @@ PROCEDURE Invite_User(Sender="Alice", Target="Bob"):
         Sender: "Alice", Target: "Bob", Type: "WELCOME",
         Payload: { Ciphertext, Alice_Temp_Classic_Public_Key, Encrypted_Group_Secret, Epoch: 0 }
     }
-    Client_UI -> Delivery_Service: POST /mls/send (Payload: Welcome_Message, via mTLS)
-    Delivery_Service -> Memory: Append Welcome_Message to Message_Queue
+    Client_UI -> Envoy_Proxy: POST /mls/send (Payload: Welcome_Message, mTLS: Client_SVID)
+    Envoy_Proxy -> Delivery_Service: Forward Request
+    Delivery_Service -> SQLite: Insert Welcome_Message into messages table
 END PROCEDURE
 ```
 
@@ -96,12 +103,13 @@ END PROCEDURE
 
 ```text
 PROCEDURE Process_Inbox(User="Bob"):
-    Client_UI -> Delivery_Service: GET /mls/messages/Bob (via mTLS)
-    Delivery_Service -> Memory: Extract and Remove messages where Target == "Bob"
+    Client_UI -> Envoy_Proxy: GET /mls/messages/Bob (mTLS: Client_SVID)
+    Envoy_Proxy -> Delivery_Service: Forward Request
+    Delivery_Service -> SQLite: Select and Delete records from messages table where Target == "Bob"
     Delivery_Service -> Client_UI: Return [Welcome_Message]
     
     // 1. Quantum Decapsulation
-    PQ_Shared_Secret = Kyber768_Decapsulate(Bob_PQ_Keys.Private, Welcome_Message.Ciphertext)
+    PQ_Shared_Secret = MLKEM768_Decapsulate(Bob_PQ_Keys.Private, Welcome_Message.Ciphertext)
     
     // 2. Classical Key Exchange
     Classic_Shared_Secret = X25519_DiffieHellman(Bob_Classic_Keys.Private, Welcome_Message.Alice_Temp_Classic_Public_Key)
@@ -110,7 +118,7 @@ PROCEDURE Process_Inbox(User="Bob"):
     Temporary_Session_Key = HKDF_SHA256(Concatenate(PQ_Shared_Secret, Classic_Shared_Secret))
     Initial_Group_Secret = AES_GCM_Decrypt(Key=Temporary_Session_Key, Ciphertext=Welcome_Message.Encrypted_Group_Secret)
     
-    // 4. Setup Local State
+    // 4. Setup Local State (MLS Engine)
     Bob_State.App_Secret, Bob_State.Epoch_Secret = HKDF_SHA256_Derive(Initial_Group_Secret)
     Bob_State.Epoch = 0
 END PROCEDURE
@@ -131,12 +139,15 @@ PROCEDURE Send_Encrypted_Message(Sender="Alice", Target="Bob", Message="Hello"):
     
     // 3. Transmit
     App_Message = { Sender: "Alice", Target: "Bob", Type: "APPLICATION", Payload: Message_Ciphertext }
-    Client_UI -> Delivery_Service: POST /mls/send (Payload: App_Message, via mTLS)
-    Delivery_Service -> Memory: Append App_Message to Message_Queue
+    Client_UI -> Envoy_Proxy: POST /mls/send (Payload: App_Message, mTLS: Client_SVID)
+    Envoy_Proxy -> Delivery_Service: Forward Request
+    Delivery_Service -> SQLite: Insert App_Message into messages table
 END PROCEDURE
 
 PROCEDURE Receive_Encrypted_Message(User="Bob"):
-    Client_UI -> Delivery_Service: GET /mls/messages/Bob (via mTLS)
+    Client_UI -> Envoy_Proxy: GET /mls/messages/Bob (mTLS: Client_SVID)
+    Envoy_Proxy -> Delivery_Service: Forward Request
+    Delivery_Service -> SQLite: Pop App_Message from messages table
     Delivery_Service -> Client_UI: Return [App_Message]
     
     // 1. Decrypt with Current Epoch Key

@@ -67,31 +67,61 @@ services:
       - "org.securesphere.service=backend"
       - "com.docker.compose.service=backend-service"
 
-  client-ui:
+  client-alice:
     build: 
       context: ./services/backend
       dockerfile: Dockerfile
-    container_name: client-ui
+    container_name: client-alice
     volumes:
-      # 1. CRITICAL: Mount the socket volume
       - spire-agent-socket:/run/spire/sockets
-      
-      # 2. Map Code
       - ./services/client-ui/main.py:/app/main.py
       - ./services/client-ui/templates:/app/templates
       - ./services/backend/pq_crypto.py:/app/pq_crypto.py
       - ./services/backend/mls.py:/app/mls.py
     working_dir: /app
     environment:
-      # FIX: Ensure it is 'unix://' followed by the absolute path
+      - USER_ID=alice
+      - PEER_ID=bob
+      - SERVER_URL=https://envoy-proxy:8443
+      - PORT=3001
       - SPIFFE_ENDPOINT_SOCKET=unix:///run/spire/sockets/agent.sock
       - LD_LIBRARY_PATH=/usr/local/lib
       - PYTHONPATH=/app
     command: python3 main.py
     ports:
-      - "3000:3000"
+      - "3001:3001"
     networks:
       - zero-trust-net
+    labels:
+      - "com.docker.compose.service=client-alice"
+
+  client-bob:
+    build: 
+      context: ./services/backend
+      dockerfile: Dockerfile
+    container_name: client-bob
+    volumes:
+      - spire-agent-socket:/run/spire/sockets
+      - ./services/client-ui/main.py:/app/main.py
+      - ./services/client-ui/templates:/app/templates
+      - ./services/backend/pq_crypto.py:/app/pq_crypto.py
+      - ./services/backend/mls.py:/app/mls.py
+    working_dir: /app
+    environment:
+      - USER_ID=bob
+      - PEER_ID=alice
+      - SERVER_URL=https://envoy-proxy:8443
+      - PORT=3002
+      - SPIFFE_ENDPOINT_SOCKET=unix:///run/spire/sockets/agent.sock
+      - LD_LIBRARY_PATH=/usr/local/lib
+      - PYTHONPATH=/app
+    command: python3 main.py
+    ports:
+      - "3002:3002"
+    networks:
+      - zero-trust-net
+    labels:
+      - "com.docker.compose.service=client-bob"
 
 volumes:
   spire-server-data: # Persist Server Data

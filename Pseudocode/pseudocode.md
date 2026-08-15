@@ -8,17 +8,17 @@ This document provides a high-level algorithmic representation of the components
 
 **Class** `PQHybridEngine`
 **Properties:**
-- `kem_alg`: Configured to use Kyber768
+- `kem_alg`: Configured to use ML-KEM-768
 
 **Method** `generate_server_keys()`
-1. Generate Post-Quantum keypair (PQ_Public_Key, PQ_Private_Key) using Kyber.
+1. Generate Post-Quantum keypair (PQ_Public_Key, PQ_Private_Key) using ML-KEM-768.
 2. Generate Classical keypair (Classic_Public_Key, Classic_Private_Key) using X25519.
 3. Save private keys securely in instance state.
 4. **Return** Base64 encoded structure containing `pq_pk` and `classic_pk`.
 
 **Method** `client_encapsulate(server_keys)`
 1. Decode server's PQ and Classical public keys.
-2. Perform PQ encapsulation using server's Kyber public key:
+2. Perform PQ encapsulation using server's ML-KEM-768 public key:
    - Output: `ciphertext`, `pq_shared_secret`
 3. Generate new Classical keypair (X25519) for the client.
 4. Perform Classical Diffie-Hellman exchange using server's X25519 public key and client's X25519 private key:
@@ -28,7 +28,7 @@ This document provides a high-level algorithmic representation of the components
 
 **Method** `server_decapsulate(client_data)`
 1. Decode client's `ciphertext` and `client_classic_pk`.
-2. Perform PQ decapsulation on `ciphertext` using server's Kyber private key:
+2. Perform PQ decapsulation on `ciphertext` using server's ML-KEM-768 private key:
    - Output: `pq_shared_secret`
 3. Perform Classical Diffie-Hellman exchange using client's X25519 public key and server's X25519 private key:
    - Output: `classic_shared_secret`
@@ -107,72 +107,69 @@ This document provides a high-level algorithmic representation of the components
 ## 3. Backend Delivery Service (`services/backend/main.py`)
 
 **State:**
-- `key_package_store`: In-memory dictionary mapped by identity.
-- `message_queue`: In-memory list array for routing messages.
+- Persistent tables (`key_packages` and `messages`) in SQLite database (`securesphere.db`).
 
 **Endpoint** `POST /mls/key-package`
-1. Receive `KeyPackageModel` containing user's public keys.
-2. Verify SPIFFE mTLS identity (silently fail in Dev Mode).
-3. Store `KeyPackageModel` in `key_package_store` mapped by identity.
+1. Parse client certificate details from the `X-Forwarded-Client-Cert` (XFCC) header.
+2. Verify that the client's SPIFFE ID is authorized (e.g. `client-alice` or `client-bob`). Reject with HTTP 401/403 if invalid.
+3. Insert or update the public keys (`pq_pk` and `classic_pk`) in the `key_packages` database table.
 4. **Return** Success Status.
 
 **Endpoint** `GET /mls/key-package/{identity}`
-1. If `identity` does not exist in `key_package_store`, Return 404 Error.
-2. **Return** Stored Key Package for the `identity`.
+1. Verify caller's SPIFFE ID in XFCC header.
+2. Query `key_packages` table for the target `identity`. Return HTTP 404 if absent.
+3. **Return** Stored Key Package.
 
 **Endpoint** `POST /mls/send`
-1. Receive `MessageModel` (Sender, Target, Payload Type, Payload).
-2. Verify SPIFFE mTLS identity.
-3. Append message to `message_queue`.
-4. **Return** Success Status.
+1. Verify caller's SPIFFE ID in XFCC header.
+2. Insert message payload, sender, target, and payload type into the `messages` database table.
+3. **Return** Success Status.
 
 **Endpoint** `GET /mls/messages/{identity}`
-1. Find all messages in `message_queue` where `target` equals `identity`.
-2. Remove matched messages from `message_queue` (Simulate queue popping).
-3. **Return** Extracted messages.
+1. Verify caller's SPIFFE ID in XFCC header.
+2. Query `messages` table for target `identity`.
+3. Delete the matching records from the database table (Pop messages).
+4. **Return** Fetched message list.
 
 ---
 
 ## 4. Client-UI Backend API (`services/client-ui/main.py`)
 
 **State:**
-- `sessions`: Local dictionary mapping User IDs to instances of `MLSEngine`.
+- `session`: Isolated client session `MLSEngine` running for a single identity (`USER_ID`).
 
 **Helper Function** `get_mtls_certs()`
-1. Use SPIFFE Workload API to fetch X.509 SVID.
-2. Write certificate and private key to temporary files for TLS client authentication.
-3. **Return** Tuple of file paths (cert, key).
+1. Call SPIFFE Workload API `fetch_x509_context()`.
+2. Extract client SVID and write SVID cert chain and private key to temp files.
+3. Extract local trust domain's root bundle and write to a temp CA file.
+4. **Return** Tuple of file paths (cert, key, ca).
 
 **Endpoint** `POST /api/publish/{user}`
-1. Get `MLSEngine` instance for `user`.
-2. `kp` = Generate Kyber Key Package via engine.
-3. Fetch mTLS certificates.
-4. HTTP POST `kp` to Backend Service (`/mls/key-package`) with mTLS.
-5. Cleanup temporary certificates.
+1. Verify `user` matches active `USER_ID`.
+2. `kp` = Generate ML-KEM-768 Key Package via session.
+3. Fetch cert, key, and ca file paths.
+4. HTTP POST `kp` to Backend Service (`/mls/key-package`) with client certs and `verify=ca`, validating Envoy's peer SPIFFE ID.
+5. Cleanup temporary files.
 6. **Return** Success Status and Visualization Data.
 
 **Endpoint** `POST /api/invite`
-1. Receive Target User and Sender identity.
-2. HTTP GET Target's Key Package from Backend Service with mTLS.
-3. `welcome_msg` = `sender_engine.create_welcome_message(target_key_package)`.
-4. HTTP POST `welcome_msg` to Backend Service (`/mls/send`) with mTLS.
-5. Cleanup temporary certificates.
-6. **Return** Success Status and Encapsulation Visualization Data.
+1. Fetch cert, key, and ca file paths.
+2. HTTP GET Target's Key Package from Backend Service with client certs and `verify=ca`, validating Envoy's peer SPIFFE ID.
+3. `welcome_msg` = `session.create_welcome_message(target_key_package)`.
+4. HTTP POST `welcome_msg` to Backend Service (`/mls/send`) with client certs and `verify=ca`.
+5. Cleanup temporary files.
+6. **Return** Success and Encap Visualization Data.
 
 **Endpoint** `POST /api/send-msg`
-1. Extract Sender identity, Target identity, and Message.
-2. `ciphertext` = `sender_engine.encrypt_application_message(Message)`.
-3. HTTP POST `ciphertext` to Backend Service (`/mls/send`) under Application payload type.
-4. Cleanup temporary certificates.
-5. **Return** Success Status and Ratchet Visualization Data.
+1. `ciphertext` = `session.encrypt_application_message(message)`.
+2. HTTP POST `ciphertext` payload to Backend Service (`/mls/send`) with client certs and `verify=ca`.
+3. Cleanup temporary files.
+4. **Return** Success and Ratchet Visualization Data.
 
 **Endpoint** `POST /api/check-inbox/{user}`
-1. Get `MLSEngine` instance for `user`.
-2. HTTP GET pending messages from Backend Service (`/mls/messages/{user}`) with mTLS.
-3. For each pending message:
-   - If type is "WELCOME": 
-     `engine.process_welcome_message(payload)`
-   - If type is "APPLICATION": 
-     `engine.decrypt_application_message(payload)`
-4. Cleanup temporary certificates.
-5. **Return** Decrypted message logs and current Epoch state.
+1. HTTP GET messages from Backend Service (`/mls/messages/{USER_ID}`) with client certs and `verify=ca`.
+2. For each message:
+   - If type is "WELCOME": `session.process_welcome_message(payload)`
+   - If type is "APPLICATION": `session.decrypt_application_message(payload)`
+3. Cleanup temporary files.
+4. **Return** Decrypted message logs and current Epoch state.

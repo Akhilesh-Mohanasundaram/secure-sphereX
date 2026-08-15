@@ -5,7 +5,7 @@ SecureSphere-X is a zero-trust, post-quantum secure communication platform. The 
 ### Application Layer (Cryptography & Business Logic)
 * **Backend Framework:** FastAPI (Python 3.9)
 * **Frontend UI:** Vue.js 3, TailwindCSS, HTML5 (Served via FastAPI Static/Template engine)
-* **Post-Quantum KEM:** `liboqs-python` (Implementing CRYSTALS-Kyber-768)
+* **Post-Quantum KEM:** `liboqs-python` (Implementing ML-KEM-768)
 * **Symmetric Encryption:** `cryptography` (AES-256-GCM)
 * **State Management:** Custom MLS-inspired Ephemeral Ratchet (`mls.py`)
 

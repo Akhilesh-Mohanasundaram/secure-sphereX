@@ -2,10 +2,10 @@
 
 > **Post-Quantum Secure Communication System with Zero-Trust Architecture**
 
-SecureSphere-X is a production-grade communication platform designed to protect sensitive data against both contemporary cyber threats and future quantum computing attacks. It combines Mutual TLS (mTLS) identity enforcement, Lattice-based cryptography (Kyber-768), and continuous MLS-style key ratcheting into a single, interactive architecture.
+SecureSphere-X is a production-grade communication platform designed to protect sensitive data against both contemporary cyber threats and future quantum computing attacks. It combines Mutual TLS (mTLS) identity enforcement, Lattice-based cryptography (ML-KEM-768), and continuous MLS-style key ratcheting into a single, interactive architecture.
 
 ## ✨ Features
-* **Post-Quantum Key Exchange:** Utilizes CRYSTALS-Kyber-768 (NIST standard) for quantum-resistant secret encapsulation.
+* **Post-Quantum Key Exchange:** Utilizes ML-KEM-768 (NIST FIPS 203 standard) for quantum-resistant secret encapsulation.
 * **Perfect Forward Secrecy:** Custom Epoch ratcheting ensures keys are destroyed and rotated after every single message.
 * **Zero-Trust Networking:** Integrates SPIFFE/SPIRE for ephemeral workload identity and Envoy Proxy for strict mTLS enforcement.
 * **Interactive Visualization:** A dynamic Vue.js frontend that intercepts and explains the mathematical transformations (plaintext ➔ lattice puzzle ➔ ciphertext) in real-time.

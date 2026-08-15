@@ -14,14 +14,14 @@ RUN apt-get update && apt-get install -y \
 
 # 1. Build liboqs (C Library)
 WORKDIR /build
-RUN git clone --branch main --single-branch --depth 1 https://github.com/open-quantum-safe/liboqs.git \
+RUN git clone --branch 0.12.0 --single-branch --depth 1 https://github.com/open-quantum-safe/liboqs.git \
     && mkdir liboqs/build && cd liboqs/build \
-    && cmake -GNinja -DOQS_USE_OPENSSL=1 -DCMAKE_INSTALL_PREFIX=/usr/local .. \
+    && cmake -GNinja -DOQS_USE_OPENSSL=1 -DBUILD_SHARED_LIBS=ON -DCMAKE_INSTALL_PREFIX=/usr/local .. \
     && ninja && ninja install
 
 # 2. Build liboqs-python (Python Wrapper)
 WORKDIR /build
-RUN git clone --branch main --single-branch --depth 1 https://github.com/open-quantum-safe/liboqs-python.git \
+RUN git clone --branch 0.12.0 --single-branch --depth 1 https://github.com/open-quantum-safe/liboqs-python.git \
     && cd liboqs-python \
     && pip install .
 
